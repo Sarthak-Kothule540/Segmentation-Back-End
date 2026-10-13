@@ -1,8 +1,6 @@
 
 
 
-
-
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
@@ -20,8 +18,12 @@ const PORT = 5174;
 // Exe 1: teeth segmenter
 const SEGMENTER_EXE = "C:/AutomaticTeethSegmenter/AutomaticTeethSegmenter.exe";
 
-// Exe 2: Identify LAT
+// Exe 2: GeometryKernel (Identify LAT and Segment)
 const LAT_EXE = "C:/IdentifyLAT/GeometryKernel.exe";
+
+// The first argument of GeometryKernel.exe: which job it should do
+const LAT_COMMAND = "IdentifyLAT";
+const SEGMENT_COMMAND = "Segment";
 
 // Main working folder
 const UPLOAD_DIR = "D:\\Temp\\uploads";
@@ -40,19 +42,43 @@ const JAW_FILES = {
   lower: "Lower.stl",
 };
 
-// Which jaws Identify LAT processes (add "lower" here to process both)
-const JAWS_TO_PROCESS = ["upper","lower"];
+// Which jaws are processed
+const JAWS_TO_PROCESS = ["upper", "lower"];
 
-// The jaw text that GeometryKernel.exe expects as its 3rd argument.
-// If the lower jaw needs another word (e.g. "Lower"), change it here.
+// The jaw text that GeometryKernel.exe expects as its 3rd argument
 const LAT_JAW_ARG = {
   upper: "upper",
-  lower: "lower", // <-- change this after we find the right word
+  lower: "Lower",
 };
+
+// When an edited LAT is saved, the original csv is copied once into this
+// sub-folder of Output, so the exe's original LAT is never lost
+const BACKUP_DIR_NAME = "Original";
+
+// ===== TEMPORARY WORKAROUND (experiment only) =====
+// The exe only looks for the upper tooth numbers (11-18, 21-28).
+// When this is true, the lower teeth are given to the exe under upper numbers
+// in a temporary folder, and the CSV files are renamed back afterwards.
+// Set it to false to turn the workaround off.
+const LOWER_NUMBER_WORKAROUND = true;
+const WORKAROUND_DIR = "D:\\Temp\\lat_lower_work\\"; // must end with a backslash
+
+
+const LOWER_TO_PROXY = {};
+for (let i = 1; i <= 8; i++) {
+  LOWER_TO_PROXY[40 + i] = 10 + i; 
+  LOWER_TO_PROXY[30 + i] = 20 + i; 
+}
+// and the other way round
+const PROXY_TO_LOWER = {};
+for (const [lower, proxy] of Object.entries(LOWER_TO_PROXY)) {
+  PROXY_TO_LOWER[proxy] = Number(lower);
+}
 
 // =====================================================================
 
 app.use(cors());
+app.use(express.json({ limit: "20mb" })); // needed to receive the edited curves
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -67,6 +93,21 @@ function jawPaths(jaw) {
     inputFile: path.join(jawDir, JAW_FILES[jaw]), // D:\Temp\uploads\upper\Upper.stl
     outputDir: path.join(jawDir, "Output"), // D:\Temp\uploads\upper\Output
   };
+}
+
+// every file in a folder (also in sub-folders) with its size and last-change time
+function snapshotFiles(dir, base = dir, result = {}) {
+  if (!fs.existsSync(dir)) return result;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      snapshotFiles(full, base, result);
+    } else {
+      const st = fs.statSync(full);
+      result[path.relative(base, full)] = `${st.size}-${st.mtimeMs}`;
+    }
+  }
+  return result;
 }
 
 // ---------------- Upload ----------------
@@ -152,29 +193,61 @@ async function runSegmenterExe(jaw) {
   }
 }
 
-// ---------------- Exe 2: Identify LAT (its own function) ----------------
-// GeometryKernel.exe IdentifyLAT <jaw folder ending with \> <jaw>
+// ---------------- Exe 2: Identify LAT ----------------
+
+
+async function runLatExeLowerViaProxy() {
+  const { outputDir } = jawPaths("lower");
+  const workOutput = path.join(WORKAROUND_DIR, "Output");
+
+  // fresh temporary folder
+  fs.rmSync(WORKAROUND_DIR, { recursive: true, force: true });
+  fs.mkdirSync(workOutput, { recursive: true });
+
+  // copy the lower results, renaming tooth files to upper numbers
+  for (const file of fs.readdirSync(outputDir)) {
+    const full = path.join(outputDir, file);
+    if (fs.statSync(full).isDirectory()) continue;
+
+    const m = file.match(/^(\d+)\.stl$/i);
+    const proxy = m ? LOWER_TO_PROXY[Number(m[1])] : undefined;
+    const newName = proxy ? `${proxy}.stl` : file; // Gum.stl, json files keep their name
+    fs.copyFileSync(full, path.join(workOutput, newName));
+  }
+
+  // same command as sir gave: IdentifyLAT <folder> Lower
+  const args = [LAT_COMMAND, WORKAROUND_DIR, LAT_JAW_ARG.lower];
+  await runExe(LAT_EXE, args, "lower LAT (workaround)");
+
+  // copy the CSV files back with the real lower tooth numbers
+  const csvFiles = [];
+  for (const file of fs.readdirSync(workOutput)) {
+    const m = file.match(/^(\d+)\.csv$/i);
+    if (!m) continue;
+    const real = PROXY_TO_LOWER[Number(m[1])];
+    if (!real) continue;
+    const newName = `${real}.csv`;
+    fs.copyFileSync(path.join(workOutput, file), path.join(outputDir, newName));
+    csvFiles.push(newName);
+  }
+
+  console.log("[lower LAT (workaround)] csv files:", csvFiles);
+  return csvFiles;
+}
+
+// GeometryKernel.exe IdentifyLAT <jaw folder ending with \> <jaw text>
 // Example: GeometryKernel.exe IdentifyLAT D:\Temp\uploads\upper\ upper
 // The exe adds "Output\" itself, so it works in D:\Temp\uploads\upper\Output\
-// async function runLatExe(jaw) {
-//   const { jawDir, outputDir } = jawPaths(jaw);
-
-//   const args = ["IdentifyLAT", jawDir, jaw];
-//   await runExe(LAT_EXE, args, `${jaw} LAT`);
-
-//   // list the CSV files that the exe created
-//   if (!fs.existsSync(outputDir)) return [];
-//   return fs.readdirSync(outputDir).filter((f) => f.toLowerCase().endsWith(".csv"));
-// }
-
-
 async function runLatExe(jaw) {
+  if (jaw === "lower" && LOWER_NUMBER_WORKAROUND) {
+    return runLatExeLowerViaProxy();
+  }
+
   const { jawDir, outputDir } = jawPaths(jaw);
 
   const before = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
 
-  // const args = ["IdentifyLAT", jawDir, jaw];
-  const args = ["IdentifyLAT", jawDir, LAT_JAW_ARG[jaw]];
+  const args = [LAT_COMMAND, jawDir, LAT_JAW_ARG[jaw]];
   await runExe(LAT_EXE, args, `${jaw} LAT`);
 
   const after = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
@@ -187,16 +260,28 @@ async function runLatExe(jaw) {
   return after.filter((f) => f.toLowerCase().endsWith(".csv"));
 }
 
+// ---------------- Exe 2: Segment (separates teeth and gum) ----------------
 
+// Same arguments as Identify LAT, only the first one is different.
+async function runSegmentExe(jaw) {
+  const { jawDir } = jawPaths(jaw);
 
+  const before = snapshotFiles(jawDir);
 
+  const args = [SEGMENT_COMMAND, jawDir, LAT_JAW_ARG[jaw]];
+  await runExe(LAT_EXE, args, `${jaw} Segment`);
 
+  const after = snapshotFiles(jawDir);
 
+  // files that did not exist before, and files that were overwritten
+  const created = Object.keys(after).filter((f) => !(f in before));
+  const changed = Object.keys(after).filter((f) => f in before && after[f] !== before[f]);
 
+  console.log(`[${jaw} Segment] new files:`, created);
+  console.log(`[${jaw} Segment] changed (overwritten) files:`, changed);
 
-
-
-
+  return { created, changed };
+}
 
 // ---------------- Identify LAT job (with progress) ----------------
 
@@ -232,7 +317,7 @@ async function runIdentifyLatJob() {
       endStep();
     }
 
-    // Step 2: exe 2 for each jaw
+    // Step 2: exe 2 (Identify LAT) for each jaw
     const csvFiles = {};
     for (const jaw of jaws) {
       startStep(`Identifying LAT for ${jaw} jaw...`);
@@ -277,11 +362,128 @@ app.get("/api/identify-lat/status", (req, res) => {
   res.json(latJob);
 });
 
+// ---------------- Segment job (with progress) ----------------
+let segmentJob = {
+  running: false,
+  done: false,
+  percent: 0,
+  label: "",
+  error: null,
+  newFiles: null,
+  stlFiles: null,
+};
+
+async function runSegmentJob() {
+  const jaws = JAWS_TO_PROCESS;
+  let finished = 0;
+
+  try {
+    const newFiles = {};
+
+    for (const jaw of jaws) {
+      segmentJob.label = `Separating teeth and gum for ${jaw} jaw...`;
+      segmentJob.percent = Math.round((finished / jaws.length) * 100);
+
+      newFiles[jaw] = await runSegmentExe(jaw);
+      finished++;
+    }
+
+    // every STL file in the Output folders (gum and teeth) is sent to the browser
+    const stlFiles = {};
+    for (const jaw of jaws) {
+      const { outputDir } = jawPaths(jaw);
+      stlFiles[jaw] = fs
+        .readdirSync(outputDir)
+        .filter((f) => f.toLowerCase().endsWith(".stl"));
+    }
+
+    console.log("Segment STL files:", stlFiles);
+    segmentJob.newFiles = newFiles;
+    segmentJob.stlFiles = stlFiles;
+    segmentJob.percent = 100;
+    segmentJob.label = "Segment completed";
+    segmentJob.done = true;
+  } catch (err) {
+    segmentJob.error = err.message;
+    segmentJob.done = true;
+  } finally {
+    segmentJob.running = false;
+  }
+}
+
+app.post("/api/segment-teeth", (req, res) => {
+  if (segmentJob.running) {
+    return res.status(409).json({ message: "Segment is already running" });
+  }
+
+  // the exe needs the Output folder (with the LAT csv files) of every jaw
+  for (const jaw of JAWS_TO_PROCESS) {
+    if (!fs.existsSync(jawPaths(jaw).outputDir)) {
+      return res.status(400).json({ message: `Please run Identify LAT first (no Output folder for ${jaw} jaw)` });
+    }
+  }
+
+  segmentJob = {
+    running: true,
+    done: false,
+    percent: 0,
+    label: "Starting...",
+    error: null,
+    newFiles: null,
+    stlFiles: null,
+  };
+
+  runSegmentJob();
+  res.json({ started: true });
+});
+
+app.get("/api/segment-teeth/status", (req, res) => {
+  res.json(segmentJob);
+});
+
+// ---------------- Save an edited LAT curve ----------------
+// Writes <jaw folder>\Output\<tooth>.csv (the original is kept once in Output\Original)
+app.post("/api/save-lat", (req, res) => {
+  const { jaw, id, csv } = req.body || {};
+
+  if (jaw !== "upper" && jaw !== "lower") {
+    return res.status(400).json({ message: "Invalid jaw" });
+  }
+  if (!/^\d{2}$/.test(String(id))) {
+    return res.status(400).json({ message: "Invalid tooth number" });
+  }
+  if (typeof csv !== "string" || !csv.trim()) {
+    return res.status(400).json({ message: "Empty csv" });
+  }
+
+  const { outputDir } = jawPaths(jaw);
+  if (!fs.existsSync(outputDir)) {
+    return res.status(400).json({ message: `Output folder not found for ${jaw} jaw` });
+  }
+
+  const filePath = path.join(outputDir, `${id}.csv`);
+
+  // keep the original LAT file once, before the first overwrite
+  const backupDir = path.join(outputDir, BACKUP_DIR_NAME);
+  const backupPath = path.join(backupDir, `${id}.csv`);
+  if (fs.existsSync(filePath) && !fs.existsSync(backupPath)) {
+    fs.mkdirSync(backupDir, { recursive: true });
+    fs.copyFileSync(filePath, backupPath);
+  }
+
+  fs.writeFileSync(filePath, csv);
+  res.json({ message: `Saved ${id}.csv` });
+});
+
+
+// ---------------- Clean Model button (CleanModel.exe, then the segmenter) ----------------
+require("./cleanModel")(app, { runExe, jawPaths, runSegmenterExe, jaws: JAWS_TO_PROCESS });
+
+
+
 // ---------------- Errors ----------------
 app.use((err, req, res, next) => {
   res.status(400).json({ message: err.message });
 });
 
 app.listen(PORT, () => console.log(`Backend running on http://localhost:${PORT}`));
-
-
