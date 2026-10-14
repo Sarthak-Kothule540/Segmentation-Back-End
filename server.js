@@ -25,6 +25,10 @@ const LAT_EXE = "C:/IdentifyLAT/GeometryKernel.exe";
 const LAT_COMMAND = "IdentifyLAT";
 const SEGMENT_COMMAND = "Segment";
 
+
+
+
+
 // Main working folder
 const UPLOAD_DIR = "D:\\Temp\\uploads";
 
@@ -478,6 +482,9 @@ app.post("/api/save-lat", (req, res) => {
 
 // ---------------- Clean Model button (CleanModel.exe, then the segmenter) ----------------
 require("./cleanModel")(app, { runExe, jawPaths, runSegmenterExe, jaws: JAWS_TO_PROCESS });
+
+// ---------------- Generate Trimline / Trim Model / Add Base (new GeometryKernel.exe) ----------------
+require("./newExe")(app, { runExe, jawPaths, jaws: JAWS_TO_PROCESS });
 
 
 
