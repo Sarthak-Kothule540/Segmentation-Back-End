@@ -375,22 +375,48 @@ let segmentJob = {
   error: null,
   newFiles: null,
   stlFiles: null,
+  numberFiles: null,
 };
 
 async function runSegmentJob() {
-  const jaws = JAWS_TO_PROCESS;
+  // const jaws = JAWS_TO_PROCESS;
+  // let finished = 0;
+
+  // try {
+  //   const newFiles = {};
+
+  //   for (const jaw of jaws) {
+  //     segmentJob.label = `Separating teeth and gum for ${jaw} jaw...`;
+  //     segmentJob.percent = Math.round((finished / jaws.length) * 100);
+
+  //     newFiles[jaw] = await runSegmentExe(jaw);
+  //     finished++;
+  //   }
+
+
+    const jaws = JAWS_TO_PROCESS;
+  const totalSteps = jaws.length * 2; // Segment + TeethNumber for each jaw
   let finished = 0;
 
   try {
     const newFiles = {};
+    const numberFiles = {};
 
     for (const jaw of jaws) {
+      // exe 1: the existing Segment command (C:/IdentifyLAT)
       segmentJob.label = `Separating teeth and gum for ${jaw} jaw...`;
-      segmentJob.percent = Math.round((finished / jaws.length) * 100);
-
+      segmentJob.percent = Math.round((finished / totalSteps) * 100);
       newFiles[jaw] = await runSegmentExe(jaw);
       finished++;
+
+      // exe 2: the new exe (C:/NewExe/Release) with the TeethNumber command
+      segmentJob.label = `Numbering the teeth of ${jaw} jaw...`;
+      segmentJob.percent = Math.round((finished / totalSteps) * 100);
+      numberFiles[jaw] = await newExe.runTeethNumber(jaw);
+      finished++;
     }
+
+    segmentJob.numberFiles = numberFiles;
 
     // every STL file in the Output folders (gum and teeth) is sent to the browser
     const stlFiles = {};
@@ -435,6 +461,7 @@ app.post("/api/segment-teeth", (req, res) => {
     error: null,
     newFiles: null,
     stlFiles: null,
+    numberFiles: null,
   };
 
   runSegmentJob();
@@ -484,7 +511,9 @@ app.post("/api/save-lat", (req, res) => {
 require("./cleanModel")(app, { runExe, jawPaths, runSegmenterExe, jaws: JAWS_TO_PROCESS });
 
 // ---------------- Generate Trimline / Trim Model / Add Base (new GeometryKernel.exe) ----------------
-require("./newExe")(app, { runExe, jawPaths, jaws: JAWS_TO_PROCESS });
+// require("./newExe")(app, { runExe, jawPaths, jaws: JAWS_TO_PROCESS });
+
+const newExe = require("./newExe")(app, { runExe, jawPaths, jaws: JAWS_TO_PROCESS });
 
 
 
