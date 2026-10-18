@@ -516,6 +516,45 @@ require("./cleanModel")(app, { runExe, jawPaths, runSegmenterExe, jaws: JAWS_TO_
 const newExe = require("./newExe")(app, { runExe, jawPaths, jaws: JAWS_TO_PROCESS });
 
 
+// ---------------- Save an edited trimline ----------------
+// Overwrites the Trimline.csv that the exe made (the original is kept once in an "Original" folder next to it)
+app.post("/api/save-trimline", (req, res) => {
+  const { jaw, file, csv } = req.body || {};
+
+  if (jaw !== "upper" && jaw !== "lower") {
+    return res.status(400).json({ message: "Invalid jaw" });
+  }
+  if (typeof csv !== "string" || !csv.trim()) {
+    return res.status(400).json({ message: "Empty csv" });
+  }
+  if (typeof file !== "string" || !/^trimline\.csv$/i.test(path.basename(file))) {
+    return res.status(400).json({ message: "Invalid file" });
+  }
+
+  const { jawDir } = jawPaths(jaw);
+  const filePath = path.resolve(jawDir, file);
+
+  // the file must be inside the jaw folder
+  if (!filePath.startsWith(path.resolve(jawDir) + path.sep)) {
+    return res.status(400).json({ message: "Invalid file path" });
+  }
+  if (!fs.existsSync(filePath)) {
+    return res.status(400).json({ message: "Trimline.csv not found" });
+  }
+
+  // keep the original file once, before the first overwrite
+  const backupDir = path.join(path.dirname(filePath), BACKUP_DIR_NAME);
+  const backupPath = path.join(backupDir, path.basename(filePath));
+  if (!fs.existsSync(backupPath)) {
+    fs.mkdirSync(backupDir, { recursive: true });
+    fs.copyFileSync(filePath, backupPath);
+  }
+
+  fs.writeFileSync(filePath, csv);
+  res.json({ message: `Saved ${path.basename(filePath)}` });
+});
+
+
 
 // ---------------- Errors ----------------
 app.use((err, req, res, next) => {
