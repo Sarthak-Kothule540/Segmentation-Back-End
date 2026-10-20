@@ -342,6 +342,16 @@ async function runIdentifyLatJob() {
   }
 }
 
+
+
+
+
+
+
+
+
+
+
 // start the job and answer immediately
 app.post("/api/identify-lat", (req, res) => {
   if (latJob.running) {
