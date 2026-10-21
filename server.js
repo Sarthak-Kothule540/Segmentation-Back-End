@@ -19,7 +19,8 @@ const PORT = 5174;
 const SEGMENTER_EXE = "C:/AutomaticTeethSegmenter/AutomaticTeethSegmenter.exe";
 
 // Exe 2: GeometryKernel (Identify LAT and Segment)
-const LAT_EXE = "C:/IdentifyLAT/GeometryKernel.exe";
+// const LAT_EXE = "C:/IdentifyLAT/GeometryKernel.exe";
+const GEOMETRY_KERNEL_EXE = "C:/Release/GeometryKernel.exe";
 
 // The first argument of GeometryKernel.exe: which job it should do
 const LAT_COMMAND = "IdentifyLAT";
@@ -52,32 +53,14 @@ const JAWS_TO_PROCESS = ["upper", "lower"];
 // The jaw text that GeometryKernel.exe expects as its 3rd argument
 const LAT_JAW_ARG = {
   upper: "upper",
-  lower: "Lower",
+  lower: "lower",
 };
 
 // When an edited LAT is saved, the original csv is copied once into this
 // sub-folder of Output, so the exe's original LAT is never lost
 const BACKUP_DIR_NAME = "Original";
 
-// ===== TEMPORARY WORKAROUND (experiment only) =====
-// The exe only looks for the upper tooth numbers (11-18, 21-28).
-// When this is true, the lower teeth are given to the exe under upper numbers
-// in a temporary folder, and the CSV files are renamed back afterwards.
-// Set it to false to turn the workaround off.
-const LOWER_NUMBER_WORKAROUND = true;
-const WORKAROUND_DIR = "D:\\Temp\\lat_lower_work\\"; // must end with a backslash
 
-
-const LOWER_TO_PROXY = {};
-for (let i = 1; i <= 8; i++) {
-  LOWER_TO_PROXY[40 + i] = 10 + i; 
-  LOWER_TO_PROXY[30 + i] = 20 + i; 
-}
-// and the other way round
-const PROXY_TO_LOWER = {};
-for (const [lower, proxy] of Object.entries(LOWER_TO_PROXY)) {
-  PROXY_TO_LOWER[proxy] = Number(lower);
-}
 
 // =====================================================================
 
@@ -200,80 +183,144 @@ async function runSegmenterExe(jaw) {
 // ---------------- Exe 2: Identify LAT ----------------
 
 
-async function runLatExeLowerViaProxy() {
-  const { outputDir } = jawPaths("lower");
-  const workOutput = path.join(WORKAROUND_DIR, "Output");
 
-  // fresh temporary folder
-  fs.rmSync(WORKAROUND_DIR, { recursive: true, force: true });
-  fs.mkdirSync(workOutput, { recursive: true });
-
-  // copy the lower results, renaming tooth files to upper numbers
-  for (const file of fs.readdirSync(outputDir)) {
-    const full = path.join(outputDir, file);
-    if (fs.statSync(full).isDirectory()) continue;
-
-    const m = file.match(/^(\d+)\.stl$/i);
-    const proxy = m ? LOWER_TO_PROXY[Number(m[1])] : undefined;
-    const newName = proxy ? `${proxy}.stl` : file; // Gum.stl, json files keep their name
-    fs.copyFileSync(full, path.join(workOutput, newName));
-  }
-
-  // same command as sir gave: IdentifyLAT <folder> Lower
-  const args = [LAT_COMMAND, WORKAROUND_DIR, LAT_JAW_ARG.lower];
-  await runExe(LAT_EXE, args, "lower LAT (workaround)");
-
-  // copy the CSV files back with the real lower tooth numbers
-  const csvFiles = [];
-  for (const file of fs.readdirSync(workOutput)) {
-    const m = file.match(/^(\d+)\.csv$/i);
-    if (!m) continue;
-    const real = PROXY_TO_LOWER[Number(m[1])];
-    if (!real) continue;
-    const newName = `${real}.csv`;
-    fs.copyFileSync(path.join(workOutput, file), path.join(outputDir, newName));
-    csvFiles.push(newName);
-  }
-
-  console.log("[lower LAT (workaround)] csv files:", csvFiles);
-  return csvFiles;
-}
 
 // GeometryKernel.exe IdentifyLAT <jaw folder ending with \> <jaw text>
 // Example: GeometryKernel.exe IdentifyLAT D:\Temp\uploads\upper\ upper
 // The exe adds "Output\" itself, so it works in D:\Temp\uploads\upper\Output\
-async function runLatExe(jaw) {
-  if (jaw === "lower" && LOWER_NUMBER_WORKAROUND) {
-    return runLatExeLowerViaProxy();
-  }
+// async function runLatExe(jaw) {
+//   if (jaw === "lower" && LOWER_NUMBER_WORKAROUND) {
+//     return runLatExeLowerViaProxy();
+//   }
 
+//   const { jawDir, outputDir } = jawPaths(jaw);
+
+//   const before = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
+
+//   const args = [LAT_COMMAND, jawDir, LAT_JAW_ARG[jaw]];
+//   await runExe(LAT_EXE, args, `${jaw} LAT`);
+
+//   const after = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
+
+//   // every file the exe created (any type), and the total
+//   console.log(`[${jaw} LAT] files before: ${before.length}, after: ${after.length}`);
+//   console.log(`[${jaw} LAT] new files:`, after.filter((f) => !before.includes(f)));
+
+//   // list the CSV files that the exe created
+//   return after.filter((f) => f.toLowerCase().endsWith(".csv"));
+// }
+
+
+// GeometryKernel.exe IdentifyLAT <jaw folder ending with \> <jaw text>
+// async function runLatExe(jaw) {
+//   const { jawDir, outputDir } = jawPaths(jaw);
+
+//   const before = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
+
+//   const args = [LAT_COMMAND, jawDir, LAT_JAW_ARG[jaw]];
+//   await runExe(GEOMETRY_KERNEL_EXE, args, `${jaw} LAT`);
+
+//   const after = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
+
+//   console.log(`[${jaw} LAT] files before: ${before.length}, after: ${after.length}`);
+//   console.log(`[${jaw} LAT] new files:`, after.filter((f) => !before.includes(f)));
+
+//   // list the CSV files that the exe created
+//   return after.filter((f) => f.toLowerCase().endsWith(".csv"));
+// }
+
+
+// GeometryKernel.exe IdentifyLAT <jaw folder ending with \> <jaw text>
+async function runLatExe(jaw) {
   const { jawDir, outputDir } = jawPaths(jaw);
 
-  const before = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
+  const before = snapshotFiles(outputDir);
 
   const args = [LAT_COMMAND, jawDir, LAT_JAW_ARG[jaw]];
-  await runExe(LAT_EXE, args, `${jaw} LAT`);
 
-  const after = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
+  // the exe may return an error code (1) even when it did its work,
+  // so the error is kept and checked after we look at the CSV files
+  let failure = null;
+  try {
+    await runExe(GEOMETRY_KERNEL_EXE, args, `${jaw} LAT`);
+  } catch (err) {
+    failure = err;
+  }
 
-  // every file the exe created (any type), and the total
-  console.log(`[${jaw} LAT] files before: ${before.length}, after: ${after.length}`);
-  console.log(`[${jaw} LAT] new files:`, after.filter((f) => !before.includes(f)));
+  const after = snapshotFiles(outputDir);
 
-  // list the CSV files that the exe created
-  return after.filter((f) => f.toLowerCase().endsWith(".csv"));
+  // CSV files that the exe created or changed in this run
+  const csvFiles = Object.keys(after).filter(
+    (f) =>
+      f.toLowerCase().endsWith(".csv") &&
+      !f.includes(path.sep) && // only files directly in Output (not Original)
+      (!(f in before) || after[f] !== before[f])
+  );
+
+  console.log(`[${jaw} LAT] csv files created or changed:`, csvFiles);
+
+  if (failure) {
+    if (csvFiles.length === 0) throw failure; // a real failure: no result
+    console.warn(`[${jaw} LAT] the exe returned an error code, but the csv files exist, so it is accepted.`);
+    console.warn(`[${jaw} LAT] ${failure.message}`);
+  }
+
+  return csvFiles;
 }
+
+
+
+
+
+
 
 // ---------------- Exe 2: Segment (separates teeth and gum) ----------------
 
 // Same arguments as Identify LAT, only the first one is different.
+// async function runSegmentExe(jaw) {
+//   const { jawDir } = jawPaths(jaw);
+
+//   const before = snapshotFiles(jawDir);
+
+//   const args = [SEGMENT_COMMAND, jawDir, LAT_JAW_ARG[jaw]];
+//   // await runExe(LAT_EXE, args, `${jaw} Segment`);
+
+//   await runExe(GEOMETRY_KERNEL_EXE, args, `${jaw} Segment`);
+
+//   const after = snapshotFiles(jawDir);
+
+//   // files that did not exist before, and files that were overwritten
+//   const created = Object.keys(after).filter((f) => !(f in before));
+//   const changed = Object.keys(after).filter((f) => f in before && after[f] !== before[f]);
+
+//   console.log(`[${jaw} Segment] new files:`, created);
+//   console.log(`[${jaw} Segment] changed (overwritten) files:`, changed);
+
+//   return { created, changed };
+// }
+
+
+// Same arguments as Identify LAT, only the first one is different.
+// async function runSegmentExe(jaw) {
+//   segmenterDone[jaw] = false; // Segment overwrites the STL files in Output
+//   const { jawDir } = jawPaths(jaw);
+
+
 async function runSegmentExe(jaw) {
   const { jawDir } = jawPaths(jaw);
 
   const before = snapshotFiles(jawDir);
 
   const args = [SEGMENT_COMMAND, jawDir, LAT_JAW_ARG[jaw]];
-  await runExe(LAT_EXE, args, `${jaw} Segment`);
+
+  // the exe may return an error code (1) even when it did its work,
+  // so the error is kept and checked after we look at the files
+  let failure = null;
+  try {
+    await runExe(GEOMETRY_KERNEL_EXE, args, `${jaw} Segment`);
+  } catch (err) {
+    failure = err;
+  }
 
   const after = snapshotFiles(jawDir);
 
@@ -284,8 +331,18 @@ async function runSegmentExe(jaw) {
   console.log(`[${jaw} Segment] new files:`, created);
   console.log(`[${jaw} Segment] changed (overwritten) files:`, changed);
 
+  if (failure) {
+    if (created.length + changed.length === 0) throw failure; // a real failure: no result
+    console.warn(`[${jaw} Segment] the exe returned an error code, but it wrote files, so it is accepted.`);
+    console.warn(`[${jaw} Segment] ${failure.message}`);
+  }
+
   return { created, changed };
 }
+
+
+
+
 
 // ---------------- Identify LAT job (with progress) ----------------
 
@@ -523,7 +580,14 @@ require("./cleanModel")(app, { runExe, jawPaths, runSegmenterExe, jaws: JAWS_TO_
 // ---------------- Generate Trimline / Trim Model / Add Base (new GeometryKernel.exe) ----------------
 // require("./newExe")(app, { runExe, jawPaths, jaws: JAWS_TO_PROCESS });
 
-const newExe = require("./newExe")(app, { runExe, jawPaths, jaws: JAWS_TO_PROCESS });
+// const newExe = require("./newExe")(app, { runExe, jawPaths, jaws: JAWS_TO_PROCESS });
+
+const newExe = require("./newExe")(app, {
+  runExe,
+  jawPaths,
+  jaws: JAWS_TO_PROCESS,
+  exePath: GEOMETRY_KERNEL_EXE,
+});
 
 
 // ---------------- Save an edited trimline ----------------

@@ -6,7 +6,7 @@ const path = require("path");
 // =====================================================================
 
 // The new exe
-const NEW_EXE = "C:/NewExe/Release/GeometryKernel.exe";
+// const NEW_EXE = "C:/NewExe/Release/GeometryKernel.exe";
 
 // button name sent by the app -> first argument of the exe
 const COMMANDS = {
@@ -87,7 +87,9 @@ function findNewestFile(dir, pattern, base = dir, best = { time: 0, rel: null })
 
 
 
-module.exports = function registerNewExe(app, { runExe, jawPaths, jaws }) {
+// module.exports = function registerNewExe(app, { runExe, jawPaths, jaws }) {
+
+module.exports = function registerNewExe(app, { runExe, jawPaths, jaws, exePath }) {
   // the browser reads this status every second to fill the progress bar
   // let job = { running: false, done: false, percent: 0, label: "", error: null, report: null };
     let job = { running: false, done: false, percent: 0, label: "", error: null, report: null, files: null };
@@ -125,7 +127,8 @@ module.exports = function registerNewExe(app, { runExe, jawPaths, jaws }) {
     // so the error is kept and checked after we look at the result files
     let failure = null;
     try {
-      await runExe(NEW_EXE, args, tag);
+      // await runExe(NEW_EXE, args, tag);
+      await runExe(exePath, args, tag);
     } catch (err) {
       failure = err;
     }
