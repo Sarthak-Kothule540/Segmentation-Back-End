@@ -612,19 +612,33 @@ app.post("/api/save-trimline", (req, res) => {
   if (!filePath.startsWith(path.resolve(jawDir) + path.sep)) {
     return res.status(400).json({ message: "Invalid file path" });
   }
-  if (!fs.existsSync(filePath)) {
-    return res.status(400).json({ message: "Trimline.csv not found" });
-  }
+  // if (!fs.existsSync(filePath)) {
+  //   return res.status(400).json({ message: "" });
+  // }
 
-  // keep the original file once, before the first overwrite
-  const backupDir = path.join(path.dirname(filePath), BACKUP_DIR_NAME);
-  const backupPath = path.join(backupDir, path.basename(filePath));
-  if (!fs.existsSync(backupPath)) {
-    fs.mkdirSync(backupDir, { recursive: true });
-    fs.copyFileSync(filePath, backupPath);
-  }
+  // // keep the original file once, before the first overwrite
+  // const backupDir = path.join(path.dirname(filePath), BACKUP_DIR_NAME);
+  // const backupPath = path.join(backupDir, path.basename(filePath));
+  // if (!fs.existsSync(backupPath)) {
+  //   fs.mkdirSync(backupDir, { recursive: true });
+  //   fs.copyFileSync(filePath, backupPath);
+  // }
 
-  fs.writeFileSync(filePath, csv);
+  // fs.writeFileSync(filePath, csv);
+ // the folder may be gone (for example after the segmenter ran), so create it
+fs.mkdirSync(path.dirname(filePath), { recursive: true });
+
+// keep the original file once, before the first overwrite (only if it exists)
+const backupDir = path.join(path.dirname(filePath), BACKUP_DIR_NAME);
+const backupPath = path.join(backupDir, path.basename(filePath));
+if (fs.existsSync(filePath) && !fs.existsSync(backupPath)) {
+  fs.mkdirSync(backupDir, { recursive: true });
+  fs.copyFileSync(filePath, backupPath);
+}
+
+fs.writeFileSync(filePath, csv);
+
+
   res.json({ message: `Saved ${path.basename(filePath)}` });
 });
 
