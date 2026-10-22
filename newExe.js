@@ -89,7 +89,9 @@ function findNewestFile(dir, pattern, base = dir, best = { time: 0, rel: null })
 
 // module.exports = function registerNewExe(app, { runExe, jawPaths, jaws }) {
 
-module.exports = function registerNewExe(app, { runExe, jawPaths, jaws, exePath }) {
+// module.exports = function registerNewExe(app, { runExe, jawPaths, jaws, exePath }) {
+
+module.exports = function registerNewExe(app, { runExe, jawPaths, jaws, exePath, workDir }) {
   // the browser reads this status every second to fill the progress bar
   // let job = { running: false, done: false, percent: 0, label: "", error: null, report: null };
     let job = { running: false, done: false, percent: 0, label: "", error: null, report: null, files: null };
@@ -115,89 +117,177 @@ module.exports = function registerNewExe(app, { runExe, jawPaths, jaws, exePath 
 
 
      // GeometryKernel.exe <command> <jaw folder ending with \> <jaw text>
-  async function runNewExeForJaw(commandKey, jaw) {
-    const { jawDir } = jawPaths(jaw);
-    const tag = `${jaw} ${COMMANDS[commandKey]}`;
+  // async function runNewExeForJaw(commandKey, jaw) {
+  //   const { jawDir } = jawPaths(jaw);
+  //   const tag = `${jaw} ${COMMANDS[commandKey]}`;
 
-    const before = snapshotFiles(jawDir);
+  //   const before = snapshotFiles(jawDir);
 
-    const args = [COMMANDS[commandKey], jawDir, JAW_ARG[jaw]];
+  //   // const args = [COMMANDS[commandKey], jawDir, JAW_ARG[jaw]];
 
-    // the exe may return an error code (1) even when it did its work,
-    // so the error is kept and checked after we look at the result files
-    let failure = null;
-    try {
-      // await runExe(NEW_EXE, args, tag);
-      await runExe(exePath, args, tag);
-    } catch (err) {
-      failure = err;
-    }
+  //   // const args = [COMMANDS[commandKey], workDir, JAW_ARG[jaw]];
 
-    const after = snapshotFiles(jawDir);
-    const created = Object.keys(after).filter((f) => !(f in before));
-    const changed = Object.keys(after).filter((f) => f in before && after[f] !== before[f]);
+  //    const args = [COMMANDS[commandKey], workDir];
+  //   // the exe may return an error code (1) even when it did its work,
+  //   // so the error is kept and checked after we look at the result files
+  //   let failure = null;
+  //   try {
+  //     // await runExe(NEW_EXE, args, tag);
+  //     await runExe(exePath, args, tag);
+  //   } catch (err) {
+  //     failure = err;
+  //   }
 
-    console.log(`[${tag}] new files:`, created);
-    console.log(`[${tag}] changed (overwritten) files:`, changed);
+  //   const after = snapshotFiles(jawDir);
+  //   const created = Object.keys(after).filter((f) => !(f in before));
+  //   const changed = Object.keys(after).filter((f) => f in before && after[f] !== before[f]);
 
-    if (failure) {
-      // accepted only if the result file of this command was really written
-      const madeResult = [...created, ...changed].some((f) =>
+  //   console.log(`[${tag}] new files:`, created);
+  //   console.log(`[${tag}] changed (overwritten) files:`, changed);
+
+  //   if (failure) {
+  //     // accepted only if the result file of this command was really written
+  //     const madeResult = [...created, ...changed].some((f) =>
+  //       RESULT_FILES[commandKey].test(path.basename(f))
+  //     );
+  //     if (!madeResult) throw failure;
+
+  //     console.warn(`[${tag}] the exe returned an error code, but its result file exists, so it is accepted.`);
+  //     console.warn(`[${tag}] ${failure.message}`);
+  //   }
+
+  //   return { created, changed };
+  // }
+
+
+
+  // GeometryKernel.exe <command> <common folder>   (ONE call for both jaws)
+async function runNewExe(commandKey, jawList) {
+  const tag = COMMANDS[commandKey];
+
+  const before = {};
+  for (const jaw of jawList) before[jaw] = snapshotFiles(jawPaths(jaw).jawDir);
+
+  // the exe may return an error code (1) even when it did its work,
+  // so the error is kept and checked after we look at the result files
+  let failure = null;
+  try {
+    await runExe(exePath, [COMMANDS[commandKey], workDir], tag);
+  } catch (err) {
+    failure = err;
+  }
+
+  const report = {};
+  for (const jaw of jawList) {
+    const after = snapshotFiles(jawPaths(jaw).jawDir);
+    const created = Object.keys(after).filter((f) => !(f in before[jaw]));
+    const changed = Object.keys(after).filter((f) => f in before[jaw] && after[f] !== before[jaw][f]);
+    console.log(`[${jaw} ${tag}] new files:`, created);
+    console.log(`[${jaw} ${tag}] changed (overwritten) files:`, changed);
+    report[jaw] = { created, changed };
+  }
+
+  if (failure) {
+    // accepted only if the result file of this command was written for every jaw
+    const allMade = jawList.every((jaw) =>
+      [...report[jaw].created, ...report[jaw].changed].some((f) =>
         RESULT_FILES[commandKey].test(path.basename(f))
-      );
-      if (!madeResult) throw failure;
+      )
+    );
+    if (!allMade) throw failure;
 
-      console.warn(`[${tag}] the exe returned an error code, but its result file exists, so it is accepted.`);
-      console.warn(`[${tag}] ${failure.message}`);
-    }
-
-    return { created, changed };
+    console.warn(`[${tag}] the exe returned an error code, but its result files exist, so it is accepted.`);
+    // console.warn(`[${tag}] ${failure.message}`);
+    console.warn(`[${tag}] exit code was not 0, but the result files exist.`);
   }
 
+  return report;
+}
 
 
 
 
-  async function runJob(commandKey) {
-    let finished = 0;
 
-    try {
-      const report = {};
+  // async function runJob(commandKey) {
+  //   let finished = 0;
 
-      for (const jaw of jaws) {
-        const { inputFile } = jawPaths(jaw);
-        if (!fs.existsSync(inputFile)) {
-          throw new Error(`${jaw} scan is not uploaded`);
-        }
+  //   try {
+  //     const report = {};
 
-        job.label = `${LABELS[commandKey]} for ${jaw} jaw...`;
-        job.percent = Math.round((finished / jaws.length) * 100);
+  //     for (const jaw of jaws) {
+  //       const { inputFile } = jawPaths(jaw);
+  //       if (!fs.existsSync(inputFile)) {
+  //         throw new Error(`${jaw} scan is not uploaded`);
+  //       }
 
-        report[jaw] = await runNewExeForJaw(commandKey, jaw);
-        finished++;
+  //       job.label = `${LABELS[commandKey]} for ${jaw} jaw...`;
+  //       job.percent = Math.round((finished / jaws.length) * 100);
+
+  //       report[jaw] = await runNewExeForJaw(commandKey, jaw);
+  //       finished++;
+  //     }
+
+  //          // the result file of each jaw, sent to the browser so it can show it
+  //     const files = {};
+  //     for (const jaw of jaws) {
+  //       const { jawDir } = jawPaths(jaw);
+  //       files[jaw] = findNewestFile(jawDir, RESULT_FILES[commandKey]);
+  //     }
+  //     job.files = files;
+
+
+
+  //     job.report = report;
+  //     job.percent = 100;
+  //     job.label = `${LABELS[commandKey]} completed`;
+  //     job.done = true;
+  //   } catch (err) {
+  //     job.error = err.message;
+  //     job.done = true;
+  //   } finally {
+  //     job.running = false;
+  //   }
+  // }
+
+
+
+
+
+
+
+async function runJob(commandKey) {
+  try {
+    for (const jaw of jaws) {
+      if (!fs.existsSync(jawPaths(jaw).inputFile)) {
+        throw new Error(`${jaw} scan is not uploaded`);
       }
-
-           // the result file of each jaw, sent to the browser so it can show it
-      const files = {};
-      for (const jaw of jaws) {
-        const { jawDir } = jawPaths(jaw);
-        files[jaw] = findNewestFile(jawDir, RESULT_FILES[commandKey]);
-      }
-      job.files = files;
-
-
-
-      job.report = report;
-      job.percent = 100;
-      job.label = `${LABELS[commandKey]} completed`;
-      job.done = true;
-    } catch (err) {
-      job.error = err.message;
-      job.done = true;
-    } finally {
-      job.running = false;
     }
+
+    job.label = `${LABELS[commandKey]}...`;
+    job.percent = 0;
+
+    // ONE exe call for both jaws
+    const report = await runNewExe(commandKey, jaws);
+
+    // the result file of each jaw, sent to the browser so it can show it
+    const files = {};
+    for (const jaw of jaws) {
+      files[jaw] = findNewestFile(jawPaths(jaw).jawDir, RESULT_FILES[commandKey]);
+    }
+    job.files = files;
+
+    job.report = report;
+    job.percent = 100;
+    job.label = `${LABELS[commandKey]} completed`;
+    job.done = true;
+  } catch (err) {
+    job.error = err.message;
+    job.done = true;
+  } finally {
+    job.running = false;
   }
+}
+
 
   // start the job: POST /api/new-exe/GenerateTrimline  (or TrimModel, AddBase)
   app.post("/api/new-exe/:command", (req, res) => {
@@ -224,14 +314,29 @@ module.exports = function registerNewExe(app, { runExe, jawPaths, jaws, exePath 
 
   // used by the Segment button (server.js): runs the TeethNumber command for one jaw
   // and returns the csv files that the exe created or changed (paths relative to the jaw folder)
+  // return {
+  //   async runTeethNumber(jaw) {
+  //     const { created, changed } = await runNewExeForJaw("TeethNumber", jaw);
+  //     return [...created, ...changed]
+  //       // .filter((f) => f.toLowerCase().endsWith(".csv"))
+  //          .filter((f) => /toothline\.csv$/i.test(f))
+  //       .map((f) => f.split(path.sep).join("/"));
+  //   },
+  // };
+
+
   return {
-    async runTeethNumber(jaw) {
-      const { created, changed } = await runNewExeForJaw("TeethNumber", jaw);
-      return [...created, ...changed]
-        // .filter((f) => f.toLowerCase().endsWith(".csv"))
-           .filter((f) => /toothline\.csv$/i.test(f))
+  // used by the Segment button (server.js): ONE TeethNumber call for both jaws
+  async runTeethNumber(jawList) {
+    const report = await runNewExe("TeethNumber", jawList);
+    const result = {};
+    for (const jaw of jawList) {
+      result[jaw] = [...report[jaw].created, ...report[jaw].changed]
+        .filter((f) => /toothline\.csv$/i.test(f))
         .map((f) => f.split(path.sep).join("/"));
-    },
-  };
+    }
+    return result; // { upper: [...], lower: [...] }
+  },
+};
 
 };
