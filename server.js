@@ -32,7 +32,7 @@ const SEGMENT_COMMAND = "Segment";
 
 // Main working folder
 const UPLOAD_DIR = "D:\\Temp\\uploads";
-// TESTING ONLY: true = keep the old Output folder when a new scan is uploaded
+
 const KEEP_OUTPUT_ON_UPLOAD = true;
 
 // second argument of GeometryKernel.exe: the common folder for both jaws
@@ -630,12 +630,29 @@ async function runSegmentJob() {
     segmentJob.numberFiles = numberFiles;
 
     // every STL file in the Output folders (gum and teeth) is sent to the browser
+    // const stlFiles = {};
+    // for (const jaw of jaws) {
+    //   const { outputDir } = jawPaths(jaw);
+    //   stlFiles[jaw] = fs
+    //     .readdirSync(outputDir)
+    //     .filter((f) => f.toLowerCase().endsWith(".stl"));
+    // }
+
+
+        // only the STL files that the Segment exe itself created or changed (gum and teeth)
     const stlFiles = {};
     for (const jaw of jaws) {
       const { outputDir } = jawPaths(jaw);
+      const info = (newFiles && newFiles[jaw]) || {};
+      const touched = new Set(
+        [...(info.changed || []), ...(info.created || [])].map((p) =>
+          p.split(/[\\/]/).pop().toLowerCase()
+        )
+      );
       stlFiles[jaw] = fs
         .readdirSync(outputDir)
-        .filter((f) => f.toLowerCase().endsWith(".stl"));
+        .filter((f) => f.toLowerCase().endsWith(".stl"))
+        .filter((f) => touched.has(f.toLowerCase()));
     }
 
     console.log("Segment STL files:", stlFiles);
