@@ -32,6 +32,8 @@ const SEGMENT_COMMAND = "Segment";
 
 // Main working folder
 const UPLOAD_DIR = "D:\\Temp\\uploads";
+// TESTING ONLY: true = keep the old Output folder when a new scan is uploaded
+const KEEP_OUTPUT_ON_UPLOAD = true;
 
 // second argument of GeometryKernel.exe: the common folder for both jaws
 const EXE_WORK_DIR = "D:/Temp/uploads/";
@@ -126,7 +128,11 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
   fs.writeFileSync(inputFile, req.file.buffer);
 
   
+  // fs.rmSync(outputDir, { recursive: true, force: true });
+  // new file uploaded, so old results are no longer valid (unless we are testing)
+if (!KEEP_OUTPUT_ON_UPLOAD) {
   fs.rmSync(outputDir, { recursive: true, force: true });
+}
 
   res.json({ message: `${JAW_FILES[type]} uploaded successfully` });
 });
@@ -175,7 +181,7 @@ async function runSegmenterExe(jaw) {
 
   
   
-  fs.rmSync(outputDir, { recursive: true, force: true });
+  // fs.rmSync(outputDir, { recursive: true, force: true });
 
   await runExe(SEGMENTER_EXE, [inputFile, "--jaw", jaw], `${jaw} segmenter`);
 
@@ -788,6 +794,22 @@ fs.writeFileSync(filePath, csv);
 
   res.json({ message: `Saved ${path.basename(filePath)}` });
 });
+
+
+
+// tells the browser whether the Output folder of every jaw already has segmenter files
+app.get("/api/output-ready", (req, res) => {
+  const jaws = {};
+  for (const jaw of JAWS_TO_PROCESS) {
+    const { outputDir } = jawPaths(jaw);
+    jaws[jaw] =
+      fs.existsSync(outputDir) &&
+      fs.readdirSync(outputDir).some((f) => f.toLowerCase().endsWith(".stl"));
+  }
+  res.json({ ready: JAWS_TO_PROCESS.every((jaw) => jaws[jaw]), jaws });
+});
+
+
 
 
 
