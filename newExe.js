@@ -268,7 +268,7 @@ async function runJob(commandKey) {
 
     // ONE exe call for both jaws
     const report = await runNewExe(commandKey, jaws);
-
+    
     // the result file of each jaw, sent to the browser so it can show it
     const files = {};
     for (const jaw of jaws) {

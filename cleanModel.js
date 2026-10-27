@@ -61,8 +61,11 @@ module.exports = function registerCleanModel(app, { runExe,
 
         const cleanedFile = cleanedFilePath(inputFile);
         fs.rmSync(cleanedFile, { force: true }); // remove an old result
+        console.time(`${jaw} CleanModel.exe`);
+
 
         await runExe(CLEAN_EXE, getCleanArgs(jaw, inputFile, cleanedFile), `${jaw} clean`);
+        console.timeEnd(`${jaw} CleanModel.exe`);
 
         if (!fs.existsSync(cleanedFile)) {
           throw new Error(`CleanModel.exe did not create ${path.basename(cleanedFile)} for ${jaw} jaw`);
@@ -79,7 +82,10 @@ module.exports = function registerCleanModel(app, { runExe,
         // ----- Exe 2: AutomaticTeethSegmenter.exe (the same function as Identify LAT uses) -----
         job.label = `Segmenting ${jaw} jaw...`;
         job.percent = percent();
+        console.time(`${jaw} Segmenter.exe`);
+
         await runSegmenterExe(jaw);
+        console.timeEnd(`${jaw} Segmenter.exe`);
         finished++;
       }
 
