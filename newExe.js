@@ -171,6 +171,7 @@ async function runNewExe(commandKey, jawList) {
   // the exe may return an error code (1) even when it did its work,
   // so the error is kept and checked after we look at the result files
   let failure = null;
+ 
   try {
     await runExe(exePath, [COMMANDS[commandKey], workDir], tag);
   } catch (err) {

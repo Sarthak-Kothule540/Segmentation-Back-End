@@ -63,8 +63,8 @@ module.exports = function registerCleanModel(app, { runExe,
         fs.rmSync(cleanedFile, { force: true }); // remove an old result
         console.time(`${jaw} CleanModel.exe`);
 
-
         await runExe(CLEAN_EXE, getCleanArgs(jaw, inputFile, cleanedFile), `${jaw} clean`);
+
         console.timeEnd(`${jaw} CleanModel.exe`);
 
         if (!fs.existsSync(cleanedFile)) {
