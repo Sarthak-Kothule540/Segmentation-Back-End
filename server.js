@@ -179,11 +179,12 @@ async function runSegmenterExe(jaw) {
     throw new Error(`${jaw} scan is not uploaded`);
   }
 
-  
+  console.time(`${jaw} Segmenter EXE time`);
   
   // fs.rmSync(outputDir, { recursive: true, force: true });
 
   await runExe(SEGMENTER_EXE, [inputFile, "--jaw", jaw], `${jaw} segmenter`);
+  console.timeEnd(`${jaw} Segmenter EXE time`);
 
   if (!fs.existsSync(outputDir)) {
     throw new Error(`Output folder not found for ${jaw} jaw`);
@@ -403,11 +404,14 @@ async function runSegmentExe(jaws) {
   for (const jaw of jaws) before[jaw] = snapshotFiles(jawPaths(jaw).jawDir);
 
   let failure = null;
+
+  console.time("EXE Execution time");
   try {
     await runExe(GEOMETRY_KERNEL_EXE, [SEGMENT_COMMAND, EXE_WORK_DIR], "Segment");
   } catch (err) {
     failure = err;
   }
+  console.timeEnd("EXE Execution time");
 
   const report = {};
   for (const jaw of jaws) {
@@ -490,7 +494,7 @@ async function runIdentifyLatJob() {
 
 
 
-    console.log("LAT csv files:", csvFiles);
+    // console.log("LAT csv files:", csvFiles);
     latJob.csvFiles = csvFiles;
     latJob.percent = 100;
     latJob.label = "Identify LAT completed";
