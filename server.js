@@ -740,7 +740,15 @@ app.post("/api/save-lat", (req, res) => {
 
 
 // ---------------- Clean Model button (CleanModel.exe, then the segmenter) ----------------
-require("./cleanModel")(app, { runExe, jawPaths, runSegmenterExe, jaws: JAWS_TO_PROCESS });
+// require("./cleanModel")(app, { runExe, jawPaths, runSegmenterExe, jaws: JAWS_TO_PROCESS });
+require("./cleanModel")(app, {
+  runExe,
+  jawPaths,
+  runSegmenterExe, // the same per-jaw function as before
+  jaws: JAWS_TO_PROCESS,
+  exePath: GEOMETRY_KERNEL_EXE,
+  workDir: EXE_WORK_DIR,
+});
 
 // ---------------- Generate Trimline / Trim Model / Add Base (new GeometryKernel.exe) ----------------
 // require("./newExe")(app, { runExe, jawPaths, jaws: JAWS_TO_PROCESS });
