@@ -170,11 +170,13 @@ module.exports = function registerCleanModel(app, { runExe,
     job.percent = percent();
 
     let failure = null;
+    console.time("[CleanModel] EXE execution time");
     try {
       await runExe(exePath, [CLEAN_COMMAND, workDir], "CleanModel");
     } catch (err) {
       failure = err;
     }
+    console.timeEnd("[CleanModel] EXE execution time");
 
     // find the cleaned scan of each jaw and make it the scan file
     for (const jaw of jaws) {
@@ -191,9 +193,9 @@ module.exports = function registerCleanModel(app, { runExe,
       // copy it out of Output now, because the segmenter deletes Output
       fs.copyFileSync(cleaned, inputFile);
     }
-    if (failure) {
-      console.warn("[CleanModel] the exe reported a failure, but the cleaned scans exist, so it is accepted.");
-    }
+    // if (failure) {
+    //   console.warn("[CleanModel] the exe reported a failure, but the cleaned scans exist, so it is accepted.");
+    // }
     finished++;
 
     // ----- AutomaticTeethSegmenter.exe (unchanged), for each jaw -----
@@ -220,6 +222,7 @@ module.exports = function registerCleanModel(app, { runExe,
     job.error = err.message;
     job.done = true;
   } finally {
+
     job.running = false;
   }
 }
