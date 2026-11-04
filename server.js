@@ -772,6 +772,9 @@ const newExe = require("./newExe")(app, {
   workDir: EXE_WORK_DIR,
 });
 
+// ---------------- Automatic Setup button ----------------
+require("./automaticSetup")(app, { runExe, jawPaths, jaws: JAWS_TO_PROCESS });
+
 // ---------------- Save an edited trimline ----------------
 // Overwrites the Trimline.csv that the exe made (the original is kept once in an "Original" folder next to it)
 app.post("/api/save-trimline", (req, res) => {
