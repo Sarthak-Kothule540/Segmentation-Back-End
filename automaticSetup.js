@@ -58,7 +58,9 @@ for (const jaw of jaws) {
 
   const inputDir = jawPaths(jaw).outputDir; // D:\Temp\uploads\upper\Output
   const jawOutputDir = path.join(AUTOMATIC_SETUP_OUTPUT_DIR, jaw); // ...\AutomaticSetupOutput\upper
-  fs.mkdirSync(jawOutputDir, { recursive: true });
+//   fs.mkdirSync(jawOutputDir, { recursive: true });
+fs.rmSync(jawOutputDir, { recursive: true, force: true }); // remove the old result of this jaw
+fs.mkdirSync(jawOutputDir, { recursive: true });
 
   try {
     await runExe(
