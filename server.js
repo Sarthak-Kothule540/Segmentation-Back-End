@@ -33,7 +33,7 @@ const SEGMENT_COMMAND = "Segment";
 // Main working folder
 const UPLOAD_DIR = "D:\\Temp\\uploads";
 
-const KEEP_OUTPUT_ON_UPLOAD = true;
+const KEEP_OUTPUT_ON_UPLOAD = false;
 
 // second argument of GeometryKernel.exe: the common folder for both jaws
 const EXE_WORK_DIR = "D:/Temp/uploads/";
@@ -147,7 +147,8 @@ function runExe(exePath, args, tag) {
     // shows the exact command in the backend terminal
     console.log(`[${tag}] RUN:`, exePath, JSON.stringify(args));
 
-    const child = spawn(exePath, args, { cwd: path.dirname(exePath) });
+     const child = spawn(exePath, args, { cwd: path.dirname(exePath) });
+    
 
     let log = "";
     child.stdout.on("data", (d) => {
@@ -181,7 +182,7 @@ async function runSegmenterExe(jaw) {
 
   console.time(`${jaw} Segmenter EXE time`);
   
-  // fs.rmSync(outputDir, { recursive: true, force: true });
+   fs.rmSync(outputDir, { recursive: true, force: true });
 
   await runExe(SEGMENTER_EXE, [inputFile, "--jaw", jaw], `${jaw} segmenter`);
   console.timeEnd(`${jaw} Segmenter EXE time`);
@@ -653,10 +654,24 @@ async function runSegmentJob() {
           p.split(/[\\/]/).pop().toLowerCase()
         )
       );
-      stlFiles[jaw] = fs
-        .readdirSync(outputDir)
-        .filter((f) => f.toLowerCase().endsWith(".stl"))
-        .filter((f) => touched.has(f.toLowerCase()));
+      // stlFiles[jaw] = fs
+      //   .readdirSync(outputDir)
+      //   .filter((f) => f.toLowerCase().endsWith(".stl"))
+      //   .filter((f) => touched.has(f.toLowerCase()));
+
+
+      let files = fs
+  .readdirSync(outputDir)
+  .filter((f) => f.toLowerCase().endsWith(".stl"))
+  // the files of this Segment run, plus the model with base (if Add Base was done)
+  .filter((f) => touched.has(f.toLowerCase()) || /^modelwithbase\.stl$/i.test(f));
+
+// when the model with base exists, it replaces the plain gum
+// if (files.some((f) => /^modelwithbase\.stl$/i.test(f))) {
+//   files = files.filter((f) => !/^gum\.stl$/i.test(f));
+// }
+stlFiles[jaw] = files;
+        
     }
 
     console.log("Segment STL files:", stlFiles);
@@ -679,9 +694,20 @@ app.post("/api/segment-teeth", (req, res) => {
   }
 
   // the exe needs the Output folder (with the LAT csv files) of every jaw
+  // for (const jaw of JAWS_TO_PROCESS) {
+  //   if (!fs.existsSync(jawPaths(jaw).outputDir)) {
+  //     return res.status(400).json({ message: `Please run Identify LAT first (no Output folder for ${jaw} jaw)` });
+  //   }
+  // }
+
+    // the exe needs the Output folder with the LAT csv files of every jaw
   for (const jaw of JAWS_TO_PROCESS) {
-    if (!fs.existsSync(jawPaths(jaw).outputDir)) {
-      return res.status(400).json({ message: `Please run Identify LAT first (no Output folder for ${jaw} jaw)` });
+    const { outputDir } = jawPaths(jaw);
+    const hasCsv =
+      fs.existsSync(outputDir) &&
+      fs.readdirSync(outputDir).some((f) => /^\d{2}\.csv$/i.test(f));
+    if (!hasCsv) {
+      return res.status(400).json({ message: `Please run Identify LAT first (no LAT files for ${jaw} jaw)` });
     }
   }
 
