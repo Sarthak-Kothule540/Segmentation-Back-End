@@ -6,8 +6,7 @@ const path = require("path");
 // =====================================================================
 const AUTOMATIC_SETUP_EXE = "C:/AutomaticSetup/AutomaticSetup.exe";
 
-// argument 1: the folder where the segmented teeth are kept (ask your sir to confirm, see the note below)
-// const SEGMENTED_TEETH_DIR = "D:/Temp/uploads/";
+
 // the option that sets the output folder: copy the real name from "AutomaticSetup.exe --help"
 const OUTPUT_OPTION = "--output"; // placeholder, confirm it
 
