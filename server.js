@@ -76,6 +76,7 @@ fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 // lets the browser download files from the working folder
 app.use("/files", express.static(UPLOAD_DIR));
+app.use("/files/AutomaticSetupOutput", express.static("D:/Temp/AutomaticSetupOutput"));
 
 // The three paths of one jaw
 function jawPaths(jaw) {
