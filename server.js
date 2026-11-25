@@ -871,7 +871,33 @@ app.get("/api/output-ready", (req, res) => {
 });
 
 
-
+// ---------------- Root: every tooth with its root, saved as one closed STL ----------------
+// The browser (roots.js saveTeethWithRoots) sends one tooth at a time, e.g. 11withroot.stl.
+// The first file of a run (?first=1) removes the old NNwithroot.stl files (only those).
+const ROOT_OUTPUT_DIR = "D:\\Temp\\Output";
+const ROOT_FILE_NAME = /^\d{2}withroot\.stl$/;
+app.post(
+  "/api/save-tooth-root",
+  express.raw({ type: "application/octet-stream", limit: "100mb" }),
+  (req, res) => {
+    const name = String(req.query.name || "");
+    if (!ROOT_FILE_NAME.test(name)) return res.status(400).json({ message: "Bad file name" });
+    if (!req.body || !req.body.length) return res.status(400).json({ message: "Empty file" });
+    try {
+      fs.mkdirSync(ROOT_OUTPUT_DIR, { recursive: true });
+      if (req.query.first === "1") {
+        for (const f of fs.readdirSync(ROOT_OUTPUT_DIR)) {
+          if (ROOT_FILE_NAME.test(f)) fs.unlinkSync(path.join(ROOT_OUTPUT_DIR, f));
+        }
+      }
+      fs.writeFileSync(path.join(ROOT_OUTPUT_DIR, name), req.body);
+      res.json({ saved: name });
+    } catch (err) {
+      console.error("save-tooth-root failed:", err);
+      res.status(500).json({ message: err.message });
+    }
+  }
+);
 
 
 // ---------------- Errors ----------------
